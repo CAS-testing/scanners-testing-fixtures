@@ -1,0 +1,24 @@
+name: build-and-push-image
+# Fixture for the inspect-build-logs + pipeline-image-match scanners:
+# builds the repo Dockerfile and emits the image reference + digest into the
+# build log so CAS can extract a ContainerImage (with digest) node.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # pulling a digest-pinned base image puts an image ref + digest in the log
+      - name: Pull base image (digest-pinned)
+        run: docker pull alpine:3.18
+
+      - name: Build image from Dockerfile
+        run: docker build -t fixtures-app:ci .
+
+      - name: Print image digest to the build log
+        run: docker image inspect fixtures-app:ci --format 'image-digest={{index .RepoDigests 0}} id={{.Id}}'
