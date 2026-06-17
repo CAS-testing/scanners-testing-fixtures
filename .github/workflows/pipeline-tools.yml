@@ -1,0 +1,22 @@
+name: pipeline-tools
+# Fixture for the pipeline-tools detection (scanner-pipex / vcs-pipeline-tools-processor):
+# uses recognizable third-party actions/tools so CAS records them as pipeline tools
+# (aspm_pipelineTools).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: hashicorp/setup-terraform@v3
+      - uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: .
+      - name: node deps
+        run: npm ci || true
