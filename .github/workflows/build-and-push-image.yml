@@ -1,7 +1,17 @@
 name: build-and-push-image
-# Fixture for the inspect-build-logs + pipeline-image-match scanners:
-# builds the repo Dockerfile and emits the image reference + digest into the
-# build log so CAS can extract a ContainerImage (with digest) node.
+# Fixture for the inspect-build-logs + pipeline-image-match scanners.
+#
+# The CAS inspect-build-logs scanner extracts a ContainerImage ONLY when the
+# build log contains a real 64-char digest in one of its recognized patterns
+# (see cas/apps/cicd/jobs/inspect-build-logs-job/src/patterns/defaults.ts), e.g.
+#   "writing image sha256:<64hex> done"   (BuildKit)
+#   "pushing manifest for <ref>@sha256:<64hex>"  (push)
+#   "Successfully built sha256:<64hex>"
+#
+# A plain `docker build` without BuildKit/push produces NO such digest line,
+# so this workflow (1) builds with BuildKit and (2) pushes to a local registry
+# to guarantee both a "writing image sha256:... done" and a
+# "pushing manifest ...@sha256:..." line land in the log.
 on:
   push:
     branches: [main]
@@ -10,15 +20,32 @@ on:
 jobs:
   build-image:
     runs-on: ubuntu-latest
+    services:
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
     steps:
       - uses: actions/checkout@v4
 
-      # pulling a digest-pinned base image puts an image ref + digest in the log
-      - name: Pull base image (digest-pinned)
-        run: docker pull alpine:3.18
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: network=host
 
-      - name: Build image from Dockerfile
-        run: docker build -t fixtures-app:ci .
+      # BuildKit emits "writing image sha256:<digest> done" and, with push to the
+      # local registry, "pushing manifest for localhost:5000/fixtures-app@sha256:<digest>"
+      - name: Build and push (BuildKit, local registry)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: localhost:5000/fixtures-app:ci
+          provenance: false
 
-      - name: Print image digest to the build log
-        run: docker image inspect fixtures-app:ci --format 'image-digest={{index .RepoDigests 0}} id={{.Id}}'
+      # Belt-and-suspenders: explicitly print the pushed digest in a recognized format
+      - name: Print pushed image digest
+        run: |
+          DIGEST=$(docker buildx imagetools inspect localhost:5000/fixtures-app:ci --format '{{json .Manifest.Digest}}' | tr -d '"')
+          echo "containerimage.digest: ${DIGEST}"
+          echo "pushing manifest for localhost:5000/fixtures-app@${DIGEST}"
