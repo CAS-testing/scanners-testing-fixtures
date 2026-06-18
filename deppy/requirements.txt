@@ -1,0 +1,5 @@
+requests==2.31.0
+django==4.2
+diango==1.0.0
+djago==2.0.0
+twliio==1.2.3
