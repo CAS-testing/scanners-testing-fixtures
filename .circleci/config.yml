@@ -65,7 +65,7 @@ jobs:
       - store_test_results:
           path: junit.xml
   deploy:
-    # This is an example deploy job, not actually used by the workflow
+    # This is an example deploy job, not actually used by the workflowtes
     docker:
       - image: cimg/base:stable
     steps:
